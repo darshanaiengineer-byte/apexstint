@@ -146,15 +146,22 @@ Data honesty rules enforced in code:
 
 ## Review status (pre-portfolio audit)
 
-**Last verified 2026-10-09 on this machine.**
+**Published.** Public repository: https://github.com/darshanaiengineer-byte/apexstint (initial commit `7619761`, 2026-10-09).
+
+**Verified locally (2026-10-09).** Test counts are from local runs:
 - `npm run check` passes: data validation, typecheck, lint, and 62 unit tests.
 - `npm run build` passes, and `npm audit --omit=dev` reports 0 vulnerabilities.
 - `npm run test:e2e` passes 26/26 browser tests, three consecutive runs with no flakes.
+- Before publishing, the full CI command sequence also passed on exactly the committed file set under Node 22.23.3 / npm 10.9.9, with the same counts.
+
+**Verified on GitHub Actions.** The first CI run for `7619761` succeeded: https://github.com/darshanaiengineer-byte/apexstint/actions/runs/37946342307 (job `check`, `ubuntu-latest`).
+- Every workflow step reported **success**, as confirmed through GitHub's public API: checkout, Node setup, `npm ci`, data validation, type check, lint, unit tests, production build, Playwright Chromium install (with system dependencies), and end-to-end tests.
+- "Upload Playwright report" was skipped, as designed; it only runs on failure.
+- The step statuses were confirmed, but the run's logs were not read. The test counts above come from local runs, not from GitHub's output.
 
 **Automated vs manual.**
 - Everything in the e2e list above is automated, including chart hover tooltips and clipboard copy. The clipboard contents are read back and compared with the page URL.
 - The e2e suite was mutation-checked: re-introducing the old stop-lap bug makes the stop-lap test fail (expected "40", received "56").
-- The CI workflow has **not** run on GitHub: this folder isn't a git repository, and no runner was available. Its exact command sequence was replayed locally in a clean copy with `npm ci` and `CI=1`, and everything passed. That replay used Node 24 rather than the workflow's Node 22, and skipped `playwright install --with-deps` because Chromium was already cached.
 - Still manual only: the earlier mobile/light-theme visual checks, and the Python cross-check of model totals and data-derived defaults (their values are now pinned in unit tests).
 
 **Fixed during the audit.**
@@ -174,7 +181,6 @@ Data honesty rules enforced in code:
 
 **Not yet production-ready.**
 - No Content-Security-Policy (needs nonce wiring for Next.js and next-themes inline scripts).
-- The CI workflow is untested on GitHub (see above).
 - Browser tests cover Chromium only. Firefox and WebKit, real mobile devices, and visual regression are not tested.
 - Clipboard is tested with permissions granted in Chromium. Behaviour under other browsers' permission prompts isn't verified; the manual-copy fallback is tested.
 - No error monitoring or analytics.
@@ -187,8 +193,8 @@ Data honesty rules enforced in code:
 - Safety Car / VSC windows (e.g. from race-control messages) to model cheap stops.
 - Traffic and undercut modelling with a gap-to-car-ahead input.
 - More races, with a season/round picker and a generated repository registry.
-- Run the CI workflow on GitHub once the repo is published; extend e2e to Firefox/WebKit; CSV export of results.
+- Extend e2e to Firefox/WebKit; CSV export of results.
 
 ## Licence
 
-Code: no licence chosen yet; choose one before publishing (e.g. MIT). Data in `data/`: CC BY-NC-SA 4.0, non-commercial only. `data/LICENSE.md` documents the sources' terms, which files are covered, and why commercial use is not cleared.
+Code: no licence chosen yet, so all rights are reserved by default until one is added. Data in `data/`: CC BY-NC-SA 4.0, non-commercial only. `data/LICENSE.md` documents the sources' terms, which files are covered, and why commercial use is not cleared.
