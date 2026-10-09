@@ -1,0 +1,168 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * ApexStint tokens. Dark charcoal is the default theme; light is selected via the toggle.
+ * Compound colours follow the common soft/medium/hard convention and are always paired
+ * with a letter (S/M/H/I/W) so identity never relies on colour alone.
+ */
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.985 0.002 100);
+  --foreground: oklch(0.18 0.005 260);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--foreground);
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--foreground);
+  --primary: oklch(0.2 0.006 260);
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.955 0.003 260);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(0.955 0.003 260);
+  --muted-foreground: oklch(0.47 0.01 260);
+  --accent: oklch(0.94 0.004 260);
+  --accent-foreground: var(--foreground);
+  --destructive: oklch(0.55 0.2 27);
+  --border: oklch(0.9 0.004 260);
+  --input: oklch(0.88 0.004 260);
+  --ring: oklch(0.55 0.14 128);
+
+  /* Brand signal: lime on charcoal, deepened for contrast on light surfaces. */
+  --signal: oklch(0.52 0.14 128);
+  --signal-foreground: oklch(0.99 0 0);
+  --grid: oklch(0.9 0.004 260);
+
+  --tyre-soft: #d93a3f;
+  --tyre-medium: #e0ad00;
+  --tyre-hard: #c9cbd1;
+  --tyre-hard-ink: #3a3c42;
+  --tyre-inter: #23963f;
+  --tyre-wet: #2a78d6;
+  --tyre-unknown: #8a8d96;
+
+  /* Categorical series (validated reference palette, light steps). */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+
+  --hypo: oklch(0.55 0.15 300);
+}
+
+.dark {
+  --background: oklch(0.17 0.004 260);
+  --foreground: oklch(0.96 0.003 260);
+  --card: oklch(0.205 0.005 260);
+  --card-foreground: var(--foreground);
+  --popover: oklch(0.22 0.005 260);
+  --popover-foreground: var(--foreground);
+  --primary: oklch(0.96 0.003 260);
+  --primary-foreground: oklch(0.18 0.005 260);
+  --secondary: oklch(0.25 0.005 260);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(0.25 0.005 260);
+  --muted-foreground: oklch(0.7 0.008 260);
+  --accent: oklch(0.27 0.006 260);
+  --accent-foreground: var(--foreground);
+  --destructive: oklch(0.65 0.2 25);
+  --border: oklch(0.29 0.006 260);
+  --input: oklch(0.32 0.006 260);
+  --ring: oklch(0.88 0.2 128);
+
+  --signal: oklch(0.89 0.2 128);
+  --signal-foreground: oklch(0.2 0.02 128);
+  --grid: oklch(0.27 0.005 260);
+
+  --tyre-soft: #ef4f55;
+  --tyre-medium: #f2c230;
+  --tyre-hard: #eceef2;
+  --tyre-hard-ink: #1b1c20;
+  --tyre-inter: #3dbb5a;
+  --tyre-wet: #3987e5;
+  --tyre-unknown: #6d7079;
+
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+
+  --hypo: oklch(0.75 0.13 300);
+}
+
+@theme inline {
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-barlow);
+  --font-mono: var(--font-jetbrains);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-signal: var(--signal);
+  --color-signal-foreground: var(--signal-foreground);
+  --color-hypo: var(--hypo);
+  --color-tyre-soft: var(--tyre-soft);
+  --color-tyre-medium: var(--tyre-medium);
+  --color-tyre-hard: var(--tyre-hard);
+  --color-tyre-inter: var(--tyre-inter);
+  --color-tyre-wet: var(--tyre-wet);
+  --color-tyre-unknown: var(--tyre-unknown);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Subtle carbon-weave texture for hero surfaces (pure CSS, no assets). */
+.carbon {
+  background-image:
+    linear-gradient(45deg, color-mix(in oklch, var(--foreground) 3%, transparent) 25%, transparent 25%),
+    linear-gradient(-45deg, color-mix(in oklch, var(--foreground) 3%, transparent) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, color-mix(in oklch, var(--foreground) 3%, transparent) 75%),
+    linear-gradient(-45deg, transparent 75%, color-mix(in oklch, var(--foreground) 3%, transparent) 75%);
+  background-size: 6px 6px;
+  background-position: 0 0, 0 3px, 3px -3px, -3px 0;
+}
+
+/* Diagonal hatch for unknown / derived values. */
+.hatch {
+  background-image: repeating-linear-gradient(135deg, transparent 0 4px, color-mix(in oklch, var(--foreground) 22%, transparent) 4px 5px);
+}
+
+.recharts-wrapper :focus {
+  outline: none;
+}

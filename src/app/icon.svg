@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>ApexStint</title>
+  <!-- Original ApexStint mark: a racing line kissing an apex point (same geometry as LogoMark). -->
+  <rect width="32" height="32" rx="8" fill="#1b1c20"/>
+  <path d="M6 25 C 12 25, 13 9, 20 9 S 27 15, 27 15" fill="none" stroke="#f0f2f4" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="16.4" cy="13.2" r="3" fill="#b4f24e"/>
+</svg>

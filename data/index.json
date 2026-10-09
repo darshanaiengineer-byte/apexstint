@@ -1,0 +1,20 @@
+[
+  {
+    "id": "2024-01-bahrain",
+    "season": 2024,
+    "round": 1,
+    "raceName": "Bahrain Grand Prix"
+  },
+  {
+    "id": "2024-04-japan",
+    "season": 2024,
+    "round": 4,
+    "raceName": "Japanese Grand Prix"
+  },
+  {
+    "id": "2024-16-italy",
+    "season": 2024,
+    "round": 16,
+    "raceName": "Italian Grand Prix"
+  }
+]
