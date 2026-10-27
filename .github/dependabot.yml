@@ -1,0 +1,17 @@
+# Weekly dependency and GitHub Actions update checks. Dependabot opens pull requests;
+# CI (including the npm audit step) must pass before anything is merged.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Keep the framework and its lint config moving together.
+      nextjs:
+        patterns: ["next", "eslint-config-next"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

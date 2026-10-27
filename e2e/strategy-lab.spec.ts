@@ -237,3 +237,52 @@ test.describe("clipboard", () => {
     await expect(field).toHaveValue(/\/races\/2024-01-bahrain\/strategy\?cfg=/);
   });
 });
+
+test.describe("experiment provenance", () => {
+  const experimentIdOf = (page: Page) => page.getByTestId("experiment-id");
+
+  test("the lab shows a stable experiment id that changes with the inputs", async ({ page }) => {
+    await page.goto(BAHRAIN);
+    await expect(page.getByTestId("dataset-version")).toHaveText(/^sha256:[0-9a-f]{16}$/);
+    const initial = await experimentIdOf(page).textContent();
+    expect(initial).toMatch(/^exp_[0-9a-f]{16}$/);
+
+    await page.reload();
+    await expect(experimentIdOf(page)).toHaveText(initial!);
+
+    await typeInto(page.getByLabel("Pit loss per stop (s)"), "26");
+    await expect(experimentIdOf(page)).not.toHaveText(initial!);
+  });
+
+  test("a share link reproduces the same experiment id", async ({ page, browser }) => {
+    await page.goto(BAHRAIN);
+    await typeInto(strategy(page, 1).getByLabel("Stop 1 lap"), "24");
+    const cfg = await cfgFromUrl(page, (c) => c.s[1].t[0][1] === 24);
+    const id = await experimentIdOf(page).textContent();
+
+    const other = await browser.newPage();
+    await other.goto(`${BAHRAIN}?cfg=${cfg}`);
+    await expect(other.getByText("Loaded from a shared link")).toBeVisible();
+    await expect(experimentIdOf(other)).toHaveText(id!);
+    await other.close();
+  });
+
+  test("a link made with an older dataset version loads with a warning", async ({ page }) => {
+    await page.goto(BAHRAIN);
+    await typeInto(page.getByLabel("Pit loss per stop (s)"), "24");
+    const cfg = decodeCfg(await cfgFromUrl(page, (c) => c.a.p === 24));
+    expect(cfg.dv).toMatch(/^sha256:/);
+    await page.goto(`${BAHRAIN}?cfg=${encodeCfg({ ...cfg, dv: "sha256:0000000000000000" })}`);
+    await expect(page.getByText("Shared link made with an older dataset")).toBeVisible();
+    await expect(page.getByLabel("Pit loss per stop (s)")).toHaveValue("24");
+  });
+
+  test("a link made for a different race is rejected", async ({ page }) => {
+    await page.goto(BAHRAIN);
+    await typeInto(page.getByLabel("Pit loss per stop (s)"), "24");
+    const cfg = decodeCfg(await cfgFromUrl(page, (c) => c.a.p === 24));
+    await page.goto(`${BAHRAIN}?cfg=${encodeCfg({ ...cfg, r: "2024-04-japan" })}`);
+    await expect(page.getByText("Shared link couldn’t be read")).toBeVisible();
+    await expect(page.getByLabel("Pit loss per stop (s)")).toHaveValue("25");
+  });
+});

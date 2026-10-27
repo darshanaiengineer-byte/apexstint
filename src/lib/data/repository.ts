@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { canonicalJson } from "@/lib/canonical";
 import { raceSchema, type Race } from "./schema";
 import bahrain2024 from "../../../data/races/2024-01-bahrain.json";
 import japan2024 from "../../../data/races/2024-04-japan.json";
@@ -28,7 +30,7 @@ export interface RaceSummary {
 }
 
 export type RaceLoadResult =
-  | { ok: true; race: Race }
+  | { ok: true; race: Race; datasetVersion: string }
   | { ok: false; reason: "not-found" }
   | { ok: false; reason: "invalid"; issues: string[] };
 
@@ -39,6 +41,15 @@ const LOCAL_RACES: Record<string, unknown> = {
   "2024-16-italy": italy2024,
 };
 
+/**
+ * Content identity of a race file: SHA-256 of its canonical JSON, truncated to 64 bits.
+ * Regenerating or editing the data changes it; reformatting the file does not.
+ * Server-side only (node:crypto).
+ */
+export function datasetVersion(raw: unknown): string {
+  return `sha256:${createHash("sha256").update(canonicalJson(raw)).digest("hex").slice(0, 16)}`;
+}
+
 export function parseRace(raw: unknown): RaceLoadResult {
   const parsed = raceSchema.safeParse(raw);
   if (!parsed.success) {
@@ -48,7 +59,7 @@ export function parseRace(raw: unknown): RaceLoadResult {
       issues: parsed.error.issues.slice(0, 20).map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`),
     };
   }
-  return { ok: true, race: parsed.data };
+  return { ok: true, race: parsed.data, datasetVersion: datasetVersion(raw) };
 }
 
 export function summarize(race: Race): RaceSummary {
@@ -85,7 +96,7 @@ export function createLocalRepository(payloads: Record<string, unknown> = LOCAL_
     async listRaces() {
       return Object.keys(payloads)
         .map((id) => load(id))
-        .filter((r): r is { ok: true; race: Race } => r.ok)
+        .filter((r): r is Extract<RaceLoadResult, { ok: true }> => r.ok)
         .map((r) => summarize(r.race))
         .sort((a, b) => b.season - a.season || a.round - b.round);
     },

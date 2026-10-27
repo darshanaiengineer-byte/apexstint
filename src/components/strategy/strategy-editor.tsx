@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { NumberField } from "@/components/ui/number-field";
 import { fmtPosition } from "@/lib/format";
+import { LIMITS, fieldLimits } from "@/lib/sim/contract";
 import { cn } from "@/lib/utils";
 import { strategySlot, type LabDriver } from "./types";
 
@@ -130,13 +131,11 @@ export function StrategyEditor({
                     ))}
                   </NativeSelect>
                 </div>
-                <NumberField aria-label={`Stint ${i + 1} length in laps`} value={s.laps} integer min={1} max={200} onCommit={(v) => v != null && patchStint(i, { laps: v })} />
+                <NumberField aria-label={`Stint ${i + 1} length in laps`} value={s.laps} {...fieldLimits(LIMITS.stintLaps)} onCommit={(v) => v != null && patchStint(i, { laps: v })} />
                 <NumberField
                   aria-label={`Stint ${i + 1} tyre age at fitting`}
                   value={s.tyreAgeAtStart}
-                  integer
-                  min={0}
-                  max={60}
+                  {...fieldLimits(LIMITS.tyreAgeAtStart)}
                   onCommit={(v) => v != null && patchStint(i, { tyreAgeAtStart: v })}
                 />
                 <Button variant="ghost" size="icon-sm" disabled={strategy.stints.length <= 1} onClick={() => removeStint(i)} aria-label={`Remove stint ${i + 1}`}>
@@ -150,9 +149,7 @@ export function StrategyEditor({
                     <NumberField
                       aria-label={`Stop ${i + 1} lap`}
                       value={stops[i]}
-                      integer
-                      min={1}
-                      max={200}
+                      {...fieldLimits(LIMITS.stintLaps)}
                       className="h-7 w-16 text-xs"
                       onCommit={(v) => v != null && setStints(moveStop(strategy.stints, i, v))}
                     />

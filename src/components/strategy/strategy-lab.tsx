@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, Link2, Plus, RotateCcw } from "lucide-react";
 import { COMPOUNDS, type Compound } from "@/lib/data/schema";
-import { compareStrategies } from "@/lib/sim/compare";
-import { evenStints, simulate, type Assumptions, type CompoundModel, type Strategy } from "@/lib/sim/model";
+import { evenStints, type Assumptions, type CompoundModel, type Strategy } from "@/lib/sim/model";
+import { runExperiment } from "@/lib/sim/experiment";
 import { encodeLabState, type LabState } from "@/lib/share/url-state";
 import { fmtPosition } from "@/lib/format";
+import { LIMITS, MAX_STRATEGIES, fieldLimits } from "@/lib/sim/contract";
 import { COMPOUND_META, CompoundDot } from "@/components/compound";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,16 +22,20 @@ import { STRATEGY_IDS, type LabDriver } from "./types";
 
 export interface LabProps {
   raceId: string;
+  /** Content hash of the race file (provenance for every experiment run in the lab). */
+  datasetVersion: string;
   totalLaps: number;
   drivers: LabDriver[];
   defaults: LabState;
   initial: LabState;
-  shareStatus: "none" | "loaded" | "invalid";
+  shareStatus: "none" | "loaded" | "stale" | "invalid";
+  /** Dataset version a stale shared link was created with. */
+  staleFrom?: string | null;
 }
 
 const DRY: Compound[] = ["SOFT", "MEDIUM", "HARD"];
 
-export function StrategyLab({ raceId, totalLaps, drivers, defaults, initial, shareStatus }: LabProps) {
+export function StrategyLab({ raceId, datasetVersion, totalLaps, drivers, defaults, initial, shareStatus, staleFrom }: LabProps) {
   const [state, setState] = useState<LabState>(initial);
   const [showWet, setShowWet] = useState(() => initial.strategies.some((s) => s.stints.some((t) => !DRY.includes(t.compound))));
   const [copied, setCopied] = useState(false);
@@ -38,17 +43,22 @@ export function StrategyLab({ raceId, totalLaps, drivers, defaults, initial, sha
   const [notice, setNotice] = useState(shareStatus);
 
   const refDriver = drivers.find((d) => d.driverId === state.driverId);
-  const results = useMemo(() => state.strategies.map((s) => simulate(s, state.assumptions, totalLaps)), [state, totalLaps]);
-  const report = useMemo(() => compareStrategies(state.strategies, results), [state.strategies, results]);
+  // One deterministic, identifiable experiment per lab state (same inputs ⇒ same id ⇒ same results).
+  const experiment = useMemo(
+    () => runExperiment({ raceId, datasetVersion, totalLaps, assumptions: state.assumptions, strategies: state.strategies }),
+    [raceId, datasetVersion, totalLaps, state.assumptions, state.strategies],
+  );
+  const { results, report } = experiment;
   const encoded = useMemo(() => encodeLabState(state), [state]);
   const defaultEncoded = useMemo(() => encodeLabState(defaults), [defaults]);
-  const isDefault = encoded === defaultEncoded;
+  const isDefault = encoded !== null && encoded === defaultEncoded;
 
   // Keep the URL in sync so the current setup is always shareable (debounced, no history spam).
+  // A state that can't be encoded drops cfg rather than leaving a link to a different setup.
   useEffect(() => {
     const t = window.setTimeout(() => {
       const url = new URL(window.location.href);
-      if (isDefault) url.searchParams.delete("cfg");
+      if (isDefault || encoded === null) url.searchParams.delete("cfg");
       else url.searchParams.set("cfg", encoded);
       window.history.replaceState(window.history.state, "", url);
     }, 250);
@@ -78,6 +88,7 @@ export function StrategyLab({ raceId, totalLaps, drivers, defaults, initial, sha
   };
 
   const share = async () => {
+    if (encoded === null) return;
     const url = new URL(window.location.href);
     url.searchParams.set("cfg", encoded);
     try {
@@ -100,6 +111,15 @@ export function StrategyLab({ raceId, totalLaps, drivers, defaults, initial, sha
       {notice === "loaded" && (
         <Callout tone="hypo" title="Loaded from a shared link">
           These strategies and assumptions came from the URL.{" "}
+          <button className="underline underline-offset-2" onClick={() => setNotice("none")}>
+            Dismiss
+          </button>
+        </Callout>
+      )}
+      {notice === "stale" && (
+        <Callout tone="warn" title="Shared link made with an older dataset">
+          This link was created against dataset <code>{staleFrom}</code>; this race now uses <code>{datasetVersion}</code>. The inputs were loaded,
+          but the recorded data has changed, so derived defaults and comparisons may differ from what the sender saw.{" "}
           <button className="underline underline-offset-2" onClick={() => setNotice("none")}>
             Dismiss
           </button>
@@ -145,7 +165,7 @@ export function StrategyLab({ raceId, totalLaps, drivers, defaults, initial, sha
                 <Label htmlFor="base-lap" className="justify-between">
                   Base lap (s) {baseChanged ? <Badge variant="hypo">edited</Badge> : null}
                 </Label>
-                <NumberField id="base-lap" value={state.assumptions.baseLapSec} min={30} max={300} onCommit={(v) => v != null && setAssumptions({ baseLapSec: v })} />
+                <NumberField id="base-lap" value={state.assumptions.baseLapSec} {...fieldLimits(LIMITS.baseLapSec)} onCommit={(v) => v != null && setAssumptions({ baseLapSec: v })} />
                 <p className="text-xs text-muted-foreground">
                   {refDriver?.defaults.baseLapSource}.{" "}
                   {baseChanged && refDriver && (
@@ -159,7 +179,7 @@ export function StrategyLab({ raceId, totalLaps, drivers, defaults, initial, sha
                 <Label htmlFor="pit-loss" className="justify-between">
                   Pit loss per stop (s) {pitChanged ? <Badge variant="hypo">edited</Badge> : null}
                 </Label>
-                <NumberField id="pit-loss" value={state.assumptions.pitLossSec} min={0} max={120} onCommit={(v) => v != null && setAssumptions({ pitLossSec: v })} />
+                <NumberField id="pit-loss" value={state.assumptions.pitLossSec} {...fieldLimits(LIMITS.pitLossSec)} onCommit={(v) => v != null && setAssumptions({ pitLossSec: v })} />
                 <p className="text-xs text-muted-foreground">
                   {refDriver?.defaults.pitLossSource}.{" "}
                   {pitChanged && refDriver && (
@@ -193,20 +213,18 @@ export function StrategyLab({ raceId, totalLaps, drivers, defaults, initial, sha
                 return (
                   <div key={c} className="grid grid-cols-[1.5rem_repeat(4,minmax(0,1fr))] items-center gap-1.5">
                     <CompoundDot compound={c} />
-                    <NumberField className="h-8 px-2 text-xs" aria-label={`${label} pace offset`} value={m.paceOffsetSec} min={-30} max={30} onCommit={(v) => v != null && setCompound(c, { paceOffsetSec: v })} />
-                    <NumberField className="h-8 px-2 text-xs" aria-label={`${label} wear per lap`} value={m.degSecPerLap} min={0} max={5} onCommit={(v) => v != null && setCompound(c, { degSecPerLap: v })} />
+                    <NumberField className="h-8 px-2 text-xs" aria-label={`${label} pace offset`} value={m.paceOffsetSec} {...fieldLimits(LIMITS.paceOffsetSec)} onCommit={(v) => v != null && setCompound(c, { paceOffsetSec: v })} />
+                    <NumberField className="h-8 px-2 text-xs" aria-label={`${label} wear per lap`} value={m.degSecPerLap} {...fieldLimits(LIMITS.degSecPerLap)} onCommit={(v) => v != null && setCompound(c, { degSecPerLap: v })} />
                     <NumberField
                       className="h-8 px-2 text-xs"
                       aria-label={`${label} cliff starts at tyre age`}
                       value={m.cliffAfterLaps}
-                      min={1}
-                      max={100}
-                      integer
+                      {...fieldLimits(LIMITS.cliffAfterLaps)}
                       nullable
                       placeholder="none"
                       onCommit={(v) => setCompound(c, { cliffAfterLaps: v })}
                     />
-                    <NumberField className="h-8 px-2 text-xs" aria-label={`${label} extra wear past cliff`} value={m.cliffSecPerLap} min={0} max={10} onCommit={(v) => v != null && setCompound(c, { cliffSecPerLap: v })} />
+                    <NumberField className="h-8 px-2 text-xs" aria-label={`${label} extra wear past cliff`} value={m.cliffSecPerLap} {...fieldLimits(LIMITS.cliffSecPerLap)} onCommit={(v) => v != null && setCompound(c, { cliffSecPerLap: v })} />
                   </div>
                 );
               })}
@@ -218,13 +236,18 @@ export function StrategyLab({ raceId, totalLaps, drivers, defaults, initial, sha
           </Card>
 
           <div className="flex flex-wrap gap-2">
-            <Button variant="signal" onClick={share}>
+            <Button variant="signal" onClick={share} disabled={encoded === null}>
               {copied ? <Check /> : <Link2 />} {copied ? "Link copied" : "Copy share link"}
             </Button>
             <Button variant="outline" onClick={() => setState(defaults)} disabled={isDefault}>
               <RotateCcw /> Reset
             </Button>
           </div>
+          {encoded === null && (
+            <p role="alert" className="text-xs text-destructive">
+              Some inputs are outside the allowed ranges, so this setup can’t be turned into a share link.
+            </p>
+          )}
           {manualLink && (
             <div className="space-y-1.5">
               <Label htmlFor="manual-link">Copying isn’t available here. Copy this link manually:</Label>
@@ -246,8 +269,8 @@ export function StrategyLab({ raceId, totalLaps, drivers, defaults, initial, sha
                 <h2 className="font-display text-2xl font-bold uppercase tracking-wide">Strategies</h2>
                 <p className="text-sm text-muted-foreground">Edit stint lengths or stop laps. The race distance is {totalLaps} laps.</p>
               </div>
-              <Button variant="outline" size="sm" onClick={addStrategy} disabled={state.strategies.length >= 3}>
-                <Plus /> Add strategy ({state.strategies.length}/3)
+              <Button variant="outline" size="sm" onClick={addStrategy} disabled={state.strategies.length >= MAX_STRATEGIES}>
+                <Plus /> Add strategy ({state.strategies.length}/{MAX_STRATEGIES})
               </Button>
             </div>
             <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
@@ -269,7 +292,9 @@ export function StrategyLab({ raceId, totalLaps, drivers, defaults, initial, sha
 
           <ResultsPanel strategies={state.strategies} results={results} report={report} refDriver={refDriver} totalLaps={totalLaps} />
           <p className="text-xs text-muted-foreground">
-            Race <code>{raceId}</code>. Results are recomputed instantly and deterministically in your browser; nothing is sent to a server.
+            Experiment <code data-testid="experiment-id">{experiment.id}</code> · model <code>v{experiment.spec.modelVersion}</code> · race{" "}
+            <code>{raceId}</code> · dataset <code data-testid="dataset-version">{datasetVersion}</code>. Identical inputs always give the same id and
+            the same results; everything is computed deterministically in your browser and nothing is sent to a server.
           </p>
         </div>
       </div>

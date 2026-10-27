@@ -60,6 +60,8 @@ export default async function StrategyPage({ params, searchParams }: PageProps<"
   // Default reference: the winner (or the first driver with a recorded strategy).
   const ref = drivers.find((d) => d.positionText === "1") ?? drivers.find((d) => d.recorded.ok) ?? drivers[0];
   const defaults: LabState = {
+    raceId: race.id,
+    datasetVersion: res.datasetVersion,
     driverId: ref.driverId,
     assumptions: defaultAssumptions(ref.defaults.baseLapSec, ref.defaults.pitLossSec),
     strategies: initialStrategies(race, ref.driverId),
@@ -67,8 +69,12 @@ export default async function StrategyPage({ params, searchParams }: PageProps<"
 
   const raw = typeof sp.cfg === "string" ? sp.cfg : undefined;
   const decoded = raw ? decodeLabState(raw) : null;
-  const shared = decoded != null && drivers.some((d) => d.driverId === decoded.driverId) ? decoded : null;
-  const shareStatus = raw ? (shared ? "loaded" : "invalid") : "none";
+  // A link is usable if it decodes, names a driver in this race and (when it says) was made for this race.
+  const shared =
+    decoded != null && drivers.some((d) => d.driverId === decoded.driverId) && (decoded.raceId == null || decoded.raceId === race.id) ? decoded : null;
+  // Links made against a different dataset version still load, with a notice: the same inputs may now give different results.
+  const staleFrom = shared?.datasetVersion && shared.datasetVersion !== res.datasetVersion ? shared.datasetVersion : null;
+  const shareStatus = !raw ? "none" : !shared ? "invalid" : staleFrom ? "stale" : "loaded";
 
   return (
     <>
@@ -93,8 +99,10 @@ export default async function StrategyPage({ params, searchParams }: PageProps<"
           totalLaps={race.scheduledLaps}
           drivers={drivers}
           defaults={defaults}
-          initial={shared ?? defaults}
+          datasetVersion={res.datasetVersion}
+          initial={shared ? { ...shared, raceId: race.id, datasetVersion: res.datasetVersion } : defaults}
           shareStatus={shareStatus}
+          staleFrom={staleFrom}
         />
       </div>
     </>

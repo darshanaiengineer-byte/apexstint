@@ -27,6 +27,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Fail fast on known high/critical advisories in production dependencies.
+      # (Added after next@16.4.0 advisories surfaced only as a build-time SecurityFatalError.)
+      - name: Dependency audit (production, high+)
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Validate bundled dataset
         run: npm run data:validate
 

@@ -1,4 +1,7 @@
-import type { Compound } from "@/lib/data/schema";
+import { COMPOUNDS, type Compound } from "@/lib/data/schema";
+import { LIMITS, MAX_STINTS, inRange, rangeError, type Range } from "./contract";
+
+export { MAX_STINTS };
 
 /**
  * ApexStint strategy model — deterministic, additive and deliberately simple.
@@ -82,8 +85,14 @@ export interface SimResult {
   chargedStops: number;
 }
 
+/**
+ * Version of the model's formulas and semantics. Bump it whenever a change could alter the
+ * output for an already-valid input; it is part of every experiment id, so old results stay
+ * distinguishable. (Rejecting previously-accepted invalid input does not require a bump.)
+ */
+export const MODEL_VERSION = "1.0.0";
+
 export const DRY_COMPOUNDS: Compound[] = ["SOFT", "MEDIUM", "HARD"];
-export const MAX_STINTS = 6;
 
 /** Validation that blocks a simulation (errors) or merely informs (warnings). */
 export function validateStrategy(strategy: Strategy, totalLaps: number): { errors: string[]; warnings: string[] } {
@@ -91,12 +100,16 @@ export function validateStrategy(strategy: Strategy, totalLaps: number): { error
   const warnings: string[] = [];
   const { stints } = strategy;
 
+  if (!Number.isInteger(totalLaps) || totalLaps < 1) errors.push(`Race distance must be a whole number of laps ≥ 1 (got ${totalLaps}).`);
   if (stints.length === 0) errors.push("Add at least one stint.");
   if (stints.length > MAX_STINTS) errors.push(`Use at most ${MAX_STINTS} stints.`);
   stints.forEach((s, i) => {
-    if (!Number.isInteger(s.laps) || s.laps < 1) errors.push(`Stint ${i + 1}: length must be a whole number of laps ≥ 1.`);
-    if (!Number.isInteger(s.tyreAgeAtStart) || s.tyreAgeAtStart < 0)
-      errors.push(`Stint ${i + 1}: starting tyre age must be a whole number ≥ 0.`);
+    if (!COMPOUNDS.includes(s.compound)) errors.push(`Stint ${i + 1}: unknown compound "${String(s.compound)}".`);
+    if (!inRange(s.laps, LIMITS.stintLaps)) errors.push(rangeError(s.laps, LIMITS.stintLaps, `Stint ${i + 1}: ${LIMITS.stintLaps.label}`));
+    if (!inRange(s.tyreAgeAtStart, LIMITS.tyreAgeAtStart))
+      errors.push(rangeError(s.tyreAgeAtStart, LIMITS.tyreAgeAtStart, `Stint ${i + 1}: ${LIMITS.tyreAgeAtStart.label}`));
+    // A non-boolean would be coerced (e.g. "no" is truthy) and silently waive the pit loss.
+    if (typeof s.freeStop !== "boolean") errors.push(`Stint ${i + 1}: free stop must be true or false (got ${String(s.freeStop)}).`);
   });
   const sum = stints.reduce((acc, s) => acc + (Number.isFinite(s.laps) ? s.laps : 0), 0);
   if (stints.length > 0 && sum !== totalLaps) {
@@ -111,6 +124,31 @@ export function validateStrategy(strategy: Strategy, totalLaps: number): { error
   if (usesWet) warnings.push("Intermediate/wet tyres are only meaningful in wet conditions; this dataset has no weather data.");
   return { errors, warnings };
 }
+
+/**
+ * Validate the global inputs against the shared contract. Every value must be finite and in
+ * range; a cliff onset may be null (no cliff). Returns human-readable errors (empty = valid).
+ */
+export function validateAssumptions(assumptions: Assumptions): string[] {
+  const errors: string[] = [];
+  // Hot path (runs on every simulation): plain predicates, no closures; messages built only on failure.
+  if (!inRange(assumptions?.baseLapSec, LIMITS.baseLapSec)) errors.push(rangeError(assumptions?.baseLapSec, LIMITS.baseLapSec, LIMITS.baseLapSec.label));
+  if (!inRange(assumptions?.pitLossSec, LIMITS.pitLossSec)) errors.push(rangeError(assumptions?.pitLossSec, LIMITS.pitLossSec, LIMITS.pitLossSec.label));
+  for (const c of COMPOUNDS) {
+    const m = assumptions?.compounds?.[c];
+    if (!m) {
+      errors.push(`Tyre model (${c.toLowerCase()}) is missing.`);
+      continue;
+    }
+    if (!inRange(m.paceOffsetSec, LIMITS.paceOffsetSec)) errors.push(compoundError(c, m.paceOffsetSec, LIMITS.paceOffsetSec));
+    if (!inRange(m.degSecPerLap, LIMITS.degSecPerLap)) errors.push(compoundError(c, m.degSecPerLap, LIMITS.degSecPerLap));
+    if (m.cliffAfterLaps !== null && !inRange(m.cliffAfterLaps, LIMITS.cliffAfterLaps)) errors.push(compoundError(c, m.cliffAfterLaps, LIMITS.cliffAfterLaps));
+    if (!inRange(m.cliffSecPerLap, LIMITS.cliffSecPerLap)) errors.push(compoundError(c, m.cliffSecPerLap, LIMITS.cliffSecPerLap));
+  }
+  return errors;
+}
+
+const compoundError = (c: Compound, value: unknown, range: Range) => rangeError(value, range, `Tyre model (${c.toLowerCase()}) ${range.label}`);
 
 /** Time for a single lap under the model. Exposed for tests and the formula explainer. */
 export function lapTime(model: CompoundModel, baseLapSec: number, tyreAge: number) {
@@ -136,9 +174,8 @@ export function simulate(strategy: Strategy, assumptions: Assumptions, totalLaps
     chargedStops: 0,
   };
   if (errors.length > 0) return empty;
-  if (!(assumptions.baseLapSec > 0) || !(assumptions.pitLossSec >= 0)) {
-    return { ...empty, errors: ["Base lap time must be > 0 and pit loss ≥ 0."] };
-  }
+  const assumptionErrors = validateAssumptions(assumptions);
+  if (assumptionErrors.length > 0) return { ...empty, errors: assumptionErrors };
 
   const comp: Components = { baseSec: 0, compoundSec: 0, degradationSec: 0, cliffSec: 0, pitSec: 0 };
   const laps: SimLap[] = [];
@@ -179,6 +216,9 @@ export function simulate(strategy: Strategy, assumptions: Assumptions, totalLaps
       );
     }
   });
+
+  // Invariant: validated finite inputs must give a finite result. Fail closed if they ever don't.
+  if (!Number.isFinite(cumulative)) return { ...empty, errors: ["Internal error: the simulation produced a non-finite race time."] };
 
   const components: Components = {
     baseSec: r3(comp.baseSec),

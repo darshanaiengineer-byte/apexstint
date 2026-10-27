@@ -36,12 +36,13 @@ npm run dev          # http://localhost:3000
 | `npm run check` | data:validate → typecheck → lint → test |
 | `npm run test:e2e` | Playwright browser tests against the production build (run `npm run build` first) |
 | `npm run test:e2e:build` | Build, then run the browser tests |
+| `npm run bench:sim` | Simulation benchmark harness (see `benchmarks/README.md`) |
 
 ## Testing
 
-**Unit tests** (Vitest, `src/**/*.test.ts`): the model, comparison, data derivations, dataset validation, URL state and formatting. Run `npm test`.
+**Unit tests** (Vitest, `src/**/*.test.ts`): the model, comparison, data derivations, dataset validation, URL state, formatting, the simulation input contract (cases generated from `LIMITS`, including share-link/simulator agreement) and experiment provenance (golden reference experiment, dataset hashes). Run `npm test`.
 
-**End-to-end browser tests** (Playwright, `e2e/*.spec.ts`): 26 tests in headless Chromium against `next start`, the production server.
+**End-to-end browser tests** (Playwright, `e2e/*.spec.ts`): 30 tests in headless Chromium against `next start`, the production server.
 
 ```bash
 npx playwright install chromium   # once per machine (CI also needs --with-deps for system libraries)
@@ -62,12 +63,13 @@ What they cover:
 - Clipboard copy (with granted permissions) and the manual-copy fallback.
 - Stint-timeline hover, plus lap-chart and gap-chart hover tooltips.
 - 404 handling, long-stop vs red-flag labelling, and the theme toggle.
+- Experiment provenance: a stable experiment id that changes with inputs and survives a share-link round-trip; stale-dataset links warned; links for another race rejected.
 
 `@playwright/test` is pinned to 1.63.0 so the browser revision is reproducible.
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on pushes to `main` and on pull requests (Ubuntu, Node 22): `npm ci` → data validation → type check → lint → unit tests → production build → install Playwright Chromium → e2e. It uploads the Playwright report when anything fails.
+`.github/workflows/ci.yml` runs on pushes to `main` and on pull requests (Ubuntu, Node 22): `npm ci` → production dependency audit (fails on high/critical advisories) → data validation → type check → lint → unit tests → production build → install Playwright Chromium → e2e. It uploads the Playwright report when anything fails. `.github/dependabot.yml` checks npm and GitHub Actions updates weekly.
 
 ## Deployment
 
@@ -75,7 +77,7 @@ The app is a standard Next.js App Router project with no backend, database or en
 
 - **Vercel**: import the repository and accept the defaults (framework: Next.js, build: `npm run build`).
 - **Any Node host**: `npm ci && npm run build && npm run start` (respects `PORT`).
-- **Containers**: run the same three commands in a `node:20-alpine` (or newer) image and expose the port.
+- **Containers**: run the same three commands in a `node:22-alpine` (or `node:24-alpine`) image; Node 20 is not supported and expose the port.
 
 Overview pages are statically pre-rendered. The strategy lab renders on demand because it reads `?cfg=`. The race JSON is bundled at build time, so there are no runtime file reads.
 
@@ -92,15 +94,22 @@ src/lib/data/              DATA LAYER
   repository.ts            RaceRepository interface + local JSON implementation
   derive.ts                Pure views: lap classification, timelines, coverage, medians
 src/lib/sim/               SIMULATION (pure, deterministic, no React)
-  model.ts                 Lap-time model, validation, stop/stint helpers, defaults
+  contract.ts              Single source of truth for every numeric input limit
+  model.ts                 Lap-time model, fail-closed validation, stop/stint helpers, MODEL_VERSION
+  experiment.ts            Reproducible experiments: spec → deterministic id + results + report
   compare.ts               Ranking, component deltas, explanations, crossovers
   recorded.ts              Recorded data → simulator starting points
-src/lib/share/url-state.ts Validated base64url encoding of lab state
+src/lib/canonical.ts       Canonical JSON + FNV-1a-64 (identities)
+src/lib/share/url-state.ts Validated base64url encoding of lab state (with optional provenance)
 src/components/            UI (shadcn/ui primitives, Recharts charts)
 src/app/                   Routes
 e2e/                       Playwright browser tests (production build)
-.github/workflows/ci.yml   CI: validate, typecheck, lint, unit, build, e2e
+.github/workflows/ci.yml   CI: audit, validate, typecheck, lint, unit, build, e2e
+benchmarks/                Simulation benchmark harness and baseline
+docs/                      Architecture overview, ADRs, roadmap, threat model
 ```
+
+Design documentation: [system overview](docs/architecture/system-overview.md), [architecture decisions](docs/architecture/architecture-decisions.md), [roadmap](docs/architecture/implementation-roadmap.md), [threat model](docs/security/threat-model.md).
 
 UI code depends only on `RaceRepository`. To plug in another *permitted* source (an API with suitable licensing, a database), implement `listRaces()` / `getRace()` and swap `raceRepository` in `src/lib/data/repository.ts`. Nothing else changes.
 
@@ -148,7 +157,12 @@ Data honesty rules enforced in code:
 
 **Published.** Public repository: https://github.com/darshanaiengineer-byte/apexstint (initial commit `7619761`, 2026-10-09).
 
-**Verified locally (2026-10-09).** Test counts are from local runs:
+**Engineering-foundation update (2026-10-27, local, not yet committed or run in CI).**
+- Security: `next` 16.4.0 → 16.4.3 (two critical remote-code-execution advisories and one high-severity denial-of-service advisory) and `zod` → 4.6.7 (one high). `/_next/image` was reachable by default; the app does not use `use cache` or Server Actions; whether the 16.4.0 deployment was exploitable was not verified. See ADR-005. Before the upgrade `next build` failed with `SecurityFatalError`; after it, `npm audit` reports 0 vulnerabilities.
+- `npm run check` passes with 283 unit tests; `npm run build` passes; `npm run test:e2e` passes 30/30 browser tests in three consecutive runs.
+- New: fail-closed simulation contract, reproducible experiment ids with dataset/model versions, benchmark harness, CI audit gate and Dependabot. See the [roadmap](docs/architecture/implementation-roadmap.md).
+
+**Verified locally (2026-10-09, at publication).** Test counts are from local runs:
 - `npm run check` passes: data validation, typecheck, lint, and 62 unit tests.
 - `npm run build` passes, and `npm audit --omit=dev` reports 0 vulnerabilities.
 - `npm run test:e2e` passes 26/26 browser tests, three consecutive runs with no flakes.
@@ -161,7 +175,7 @@ Data honesty rules enforced in code:
 
 **Automated vs manual.**
 - Everything in the e2e list above is automated, including chart hover tooltips and clipboard copy. The clipboard contents are read back and compared with the page URL.
-- The e2e suite was mutation-checked: re-introducing the old stop-lap bug makes the stop-lap test fail (expected "40", received "56").
+- The e2e suite was mutation-checked manually (by hand, not automated): re-introducing the old stop-lap bug makes the stop-lap test fail (expected "40", received "56").
 - Still manual only: the earlier mobile/light-theme visual checks, and the Python cross-check of model totals and data-derived defaults (their values are now pinned in unit tests).
 
 **Fixed during the audit.**
