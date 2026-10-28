@@ -1,0 +1,71 @@
+schema_version = 1
+id = "move-stop-distance"
+version = "1.1.0"
+title = "Moving a pit stop must not create an empty stint"
+language = "python"
+prompt = "prompt.md"
+setup = "None. Python 3 standard library only (the harness targets 3.11 and 3.12). Edit stints.py in the working directory."
+entry_file = "stints.py"
+
+[limits]
+timeout_sec = 60
+max_output_bytes = 1_000_000
+
+[acceptance]
+criteria = [
+  "The documented examples give the documented results.",
+  "Moving a stop never changes the race distance or the number of stints.",
+  "Every stint keeps at least one lap; the moved stop is clamped to the nearest legal lap.",
+  "Only the two stints either side of the moved stop change; other keys are carried through.",
+  "An index that names no stop, including a negative index, leaves the strategy unchanged.",
+  "The caller's list and stint dicts are not modified.",
+  "The result is a list. A move that changes the strategy returns a new list; a no-op may return the caller's list itself.",
+]
+
+[verifier]
+# The verifier's own limit for the candidate process is below the task limit, so a hanging
+# candidate is reported as a failed check rather than as a verifier timeout.
+command = ["{python}", "-I", "{task}/verifier/verify.py", "{workspace}", "--entry", "{entry_file}", "--timeout", "30"]
+
+# Controls prove the verifier discriminates: `python -m apexstint_evals selftest` requires each
+# one to get exactly this verdict and exactly these failing checks.
+[[controls]]
+name = "reference"
+path = "reference"
+expect = "pass"
+
+[[controls]]
+name = "starter"
+path = "starter"
+expect = "fail"
+failing_checks = ["examples", "min-one-lap", "stop-placement"]
+
+[[controls]]
+name = "upper-bound-only"
+path = "mutants/upper-bound-only"
+expect = "fail"
+failing_checks = ["examples", "min-one-lap", "stop-placement"]
+
+[[controls]]
+name = "drop-empty-stints"
+path = "mutants/drop-empty-stints"
+expect = "fail"
+failing_checks = ["examples", "stint-count-preserved"]
+
+[[controls]]
+name = "clamp-each-stint"
+path = "mutants/clamp-each-stint"
+expect = "fail"
+failing_checks = ["distance-preserved", "examples", "stop-placement"]
+
+[[controls]]
+name = "mutates-input"
+path = "mutants/mutates-input"
+expect = "fail"
+failing_checks = ["input-unchanged"]
+
+[[controls]]
+name = "negative-index"
+path = "mutants/negative-index"
+expect = "fail"
+failing_checks = ["invalid-index-unchanged", "min-one-lap", "no-exceptions"]

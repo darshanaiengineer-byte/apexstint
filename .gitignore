@@ -44,6 +44,11 @@ next-env.d.ts
 .playwright-mcp/
 /AGENTS.md
 
+# Python (evals/)
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
 # Playwright
 /test-results/
 /playwright-report/

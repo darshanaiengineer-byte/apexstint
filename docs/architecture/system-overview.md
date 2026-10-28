@@ -4,7 +4,7 @@ _Last verified against the code: 2026-10-27. "Confirmed" statements were checked
 
 ## What ApexStint is today (confirmed)
 
-A single **Next.js 16 App Router** application (TypeScript, React 19, Tailwind 4, shadcn-style primitives, Recharts). There is no separate backend, database, queue or native code. All race data is bundled at build time; all simulation runs in the browser. Every page is rendered per request so that it can carry a per-request CSP nonce (`src/proxy.ts`, ADR-007).
+A single **Next.js 16 App Router** application (TypeScript, React 19, Tailwind 4, shadcn-style primitives, Recharts). There is no separate backend, database, queue or native code. Alongside it, `evals/` is an independent Python harness for reproducible coding tasks derived from the app's invariants (ADR-008); it does not import or run the app. All race data is bundled at build time; all simulation runs in the browser. Every page is rendered per request so that it can carry a per-request CSP nonce (`src/proxy.ts`, ADR-007).
 
 ```
 data/races/*.json ──(scripts/generate-race-registry.ts)──▶ race-registry.generated.ts ──(static imports)──▶ repository.ts ──▶ server components
@@ -19,6 +19,7 @@ data/races/*.json ──(scripts/generate-race-registry.ts)──▶ race-regist
 | Layer | Modules | Responsibility | Runs |
 | --- | --- | --- | --- |
 | Data acquisition | `scripts/fetch-data.mjs` | Builds `data/` from two open APIs; never synthesises values | Manually, network |
+| Evaluation tasks | `evals/apexstint_evals/`, `evals/tasks/*/` | Runs candidate solutions against behavioural verifiers; JSON reports; task self-tests (ADR-008) | Locally (3.12), CI (`evals` job: 3.11 and 3.12) |
 | Data validation | `src/lib/data/schema.ts`, `scripts/validate-data.ts` | zod schema + referential and cross-source consistency checks | Load time, CI |
 | Race registry | `scripts/generate-race-registry.ts` → `src/lib/data/race-registry.generated.ts`, `data/index.json` | Validates every race file and generates the list of races (ADR-006) | Build/dev time; staleness enforced by tests |
 | Data access | `src/lib/data/repository.ts` | `RaceRepository` interface; local implementation over the generated registry; rejects key/`id` mismatches; content-hash `datasetVersion` | Server only (`node:crypto`) |
@@ -56,7 +57,7 @@ Model formula and its omissions: see `/methodology` in the app and `src/lib/sim/
 
 ## Verification (confirmed, 2026-10-27, local)
 
-`npm run check` (data validation, typecheck, lint, 310 unit tests), `npm run build`, `npm run test:e2e` (44 browser tests, including 14 CSP tests), `npm audit` (0 vulnerabilities after the security upgrade). GitHub Actions run 40545116827 passed for Milestone 1 (`b5dd51b`); the Milestone 2 changes (registry, CSP) have **not** yet run in CI.
+`npm run check` (data validation, typecheck, lint, 310 unit tests), `npm run build`, `npm run test:e2e` (44 browser tests, including 14 CSP tests), `npm audit` (0 vulnerabilities after the security upgrade). GitHub Actions run 40545116827 passed for Milestone 1 (`b5dd51b`) and run 40641851204 for Milestone 2 (`0b8702d`, registry and CSP; step conclusions read from the public run page, logs not read). Python harness (2026-10-28, local, Python 3.12 only): 108 pytest tests, `ruff` clean, `selftest` 7/7 controls as declared; the `evals` CI job (3.11 and 3.12) has not run yet.
 
 ## Performance (confirmed by `npm run bench:sim`)
 

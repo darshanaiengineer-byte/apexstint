@@ -40,8 +40,8 @@ Typed experiment-spec tools over the existing `runExperiment`; the model's narra
 ## Milestones 5–8 (outline)
 
 5. **Data & replay:** provenance per field, data-quality report page, race-event timeline; adapters remain replaceable; synthetic datasets for benchmarks (licensing).
-6. **Agent benchmark:** reproducible bug-injection tasks built from this codebase (e.g. the real stop-lap clamping bug and the long-stop misclassification, both already covered by regression tests), with reference fixes and tests that reject superficial fixes.
-7. **Native interop:** only after Milestone 3 benchmarks show a bottleneck; golden experiments become cross-language test vectors.
+6. **Agent benchmark:** reproducible bug-injection tasks built from this codebase, with reference fixes and tests that reject superficial fixes. **Started (2026-10-28, local):** the Python harness in `evals/` and the first task, `move-stop-distance` (the stop-lap clamping bug), with five negative controls and a CI job (ADR-008). Next: the long-stop misclassification task; a container-based runner for untrusted agent code.
+7. **Native interop:** only after Milestone 3 benchmarks show a bottleneck; golden experiments become cross-language test vectors. A bounded Rust proposal (exhaustive strategy search, with the contract, comparison method and the algorithmic change to measure first) is recorded in ADR-009; not implemented.
 8. **Production engineering:** structured logs, health checks, visual regression, Firefox/WebKit e2e — added when there is a deployment to operate.
 
 ## Decisions needed from you

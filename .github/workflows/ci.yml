@@ -62,3 +62,39 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+
+  evals:
+    name: Python evaluation harness (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.11 is the minimum the harness supports (tomllib); 3.12 is the version used in development.
+        python-version: ["3.11", "3.12"]
+    defaults:
+      run:
+        working-directory: evals
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # Test and lint tools only (pinned); the harness and tasks use the standard library.
+      - name: Install test tools
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Lint and format check
+        run: ruff check . && ruff format --check .
+
+      - name: Validate task specifications
+        run: python -m apexstint_evals validate tasks/*/
+
+      - name: Harness and task tests
+        run: python -m pytest -q
+
+      # Every task's reference must pass and every negative control must fail exactly as declared.
+      - name: Task self-tests
+        run: for task in tasks/*/; do python -m apexstint_evals selftest "$task" || exit 1; done

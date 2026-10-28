@@ -1,0 +1,3 @@
+# Test and lint tools only; the harness itself needs nothing beyond the standard library.
+pytest==9.1.1
+ruff==0.16.10

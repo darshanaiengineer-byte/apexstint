@@ -40,6 +40,8 @@ npm run dev          # http://localhost:3000
 | `npm run test:e2e:build` | Build, then run the browser tests |
 | `npm run bench:sim` | Simulation benchmark harness (see `benchmarks/README.md`) |
 
+**Evaluation tasks** (Python 3.11 or 3.12 — 3.11 is exercised only in CI; run from `evals/`; see [`evals/README.md`](evals/README.md)): `python -m pytest -q` runs the harness and task tests; `python -m apexstint_evals selftest tasks/move-stop-distance` proves the reference passes and the seeded bug and five plausible wrong fixes fail; `python -m apexstint_evals run tasks/move-stop-distance --candidate-dir <dir>` evaluates a solution and prints a JSON report.
+
 ## Testing
 
 **Unit tests** (Vitest, `src/**/*.test.ts`): the model, comparison, data derivations, dataset validation, URL state, formatting, the simulation input contract (cases generated from `LIMITS`, including share-link/simulator agreement) and experiment provenance (golden reference experiment, dataset hashes). Run `npm test`.
@@ -72,7 +74,7 @@ What they cover:
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on pushes to `main` and on pull requests (Ubuntu, Node 22): `npm ci` → production dependency audit (fails on high/critical advisories) → data validation → type check → lint → unit tests → production build → install Playwright Chromium → e2e. It uploads the Playwright report when anything fails. `.github/dependabot.yml` checks npm and GitHub Actions updates weekly.
+`.github/workflows/ci.yml` runs on pushes to `main` and on pull requests (Ubuntu, Node 22): `npm ci` → production dependency audit (fails on high/critical advisories) → data validation → type check → lint → unit tests → production build → install Playwright Chromium → e2e. It uploads the Playwright report when anything fails. A second job, `evals` (Python 3.11 and 3.12), lints the evaluation harness, validates every task, runs its tests and each task's self-test. `.github/dependabot.yml` checks npm and GitHub Actions updates weekly.
 
 ## Deployment
 
@@ -119,6 +121,7 @@ src/lib/zod-setup.ts       Runs zod without eval (required by the CSP)
 src/components/            UI (shadcn/ui primitives, Recharts charts)
 src/app/                   Routes
 e2e/                       Playwright browser tests (production build)
+evals/                     Python harness for reproducible coding-agent tasks (independent of the app)
 .github/workflows/ci.yml   CI: audit, validate, typecheck, lint, unit, build, e2e
 benchmarks/                Simulation benchmark harness and baseline
 docs/                      Architecture overview, ADRs, roadmap, threat model
