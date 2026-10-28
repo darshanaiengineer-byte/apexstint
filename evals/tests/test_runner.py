@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pathlib
+import subprocess
 import time
 
 import pytest
@@ -66,12 +67,45 @@ def test_timeout_kills_descendants_holding_the_pipes(tmp_path, python):
 
 
 def _alive(pid: int) -> bool:
-    """True while ``pid`` is a live process (zombies awaiting reaping count as dead)."""
+    """True while ``pid`` is a live process (zombies awaiting reaping count as dead).
+
+    A process that disappears is dead: before the open, /proc/<pid> is gone (FileNotFoundError);
+    between the open and the read, the kernel reports ESRCH (ProcessLookupError; seen in CI).
+    Any other error is unexpected and propagates.
+    """
     try:
         state = pathlib.Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
-    except FileNotFoundError:
+    except (FileNotFoundError, ProcessLookupError):
         return False
     return state != "Z"
+
+
+@pytest.mark.parametrize("gone", [FileNotFoundError, ProcessLookupError])
+def test_alive_treats_a_process_that_disappears_during_the_check_as_dead(monkeypatch, gone):
+    def vanished(self, *args, **kwargs):
+        raise gone(3, "No such process")
+
+    monkeypatch.setattr(pathlib.Path, "read_text", vanished)
+    assert _alive(1) is False
+
+
+def test_alive_does_not_hide_unexpected_errors(monkeypatch):
+    def denied(self, *args, **kwargs):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(pathlib.Path, "read_text", denied)
+    with pytest.raises(PermissionError):
+        _alive(1)
+
+
+def test_alive_distinguishes_a_running_process_from_a_reaped_one(python):
+    proc = subprocess.Popen([python, "-c", "import time; time.sleep(30)"])
+    try:
+        assert _alive(proc.pid)
+    finally:
+        proc.kill()
+        proc.wait()
+    assert not _alive(proc.pid)
 
 
 def test_output_is_truncated_at_the_limit(tmp_path, python):
