@@ -1,9 +1,7 @@
 import { createHash } from "node:crypto";
 import { canonicalJson } from "@/lib/canonical";
 import { raceSchema, type Race } from "./schema";
-import bahrain2024 from "../../../data/races/2024-01-bahrain.json";
-import japan2024 from "../../../data/races/2024-04-japan.json";
-import italy2024 from "../../../data/races/2024-16-italy.json";
+import { REGISTERED_RACE_FILES, REGISTERED_RACE_IDS } from "./race-registry.generated";
 
 /**
  * Data access boundary. UI code depends only on this interface, so the bundled
@@ -34,12 +32,11 @@ export type RaceLoadResult =
   | { ok: false; reason: "not-found" }
   | { ok: false; reason: "invalid"; issues: string[] };
 
-/** Raw (unvalidated) payloads keyed by race id. Add new files here. */
-const LOCAL_RACES: Record<string, unknown> = {
-  "2024-01-bahrain": bahrain2024,
-  "2024-04-japan": japan2024,
-  "2024-16-italy": italy2024,
-};
+/**
+ * Raw (unvalidated) payloads keyed by race id, from the generated registry. To add a race, add
+ * data/races/<id>.json and run `npm run registry:generate` — no code edit is needed.
+ */
+const LOCAL_RACES: Readonly<Record<string, unknown>> = REGISTERED_RACE_FILES;
 
 /**
  * Content identity of a race file: SHA-256 of its canonical JSON, truncated to 64 bits.
@@ -87,6 +84,10 @@ export function createLocalRepository(payloads: Record<string, unknown> = LOCAL_
     let result = cache.get(id);
     if (!result) {
       result = parseRace(payloads[id]);
+      // The registered key is the route; a payload declaring a different id must never be served under it.
+      if (result.ok && result.race.id !== id) {
+        result = { ok: false, reason: "invalid", issues: [`registered as "${id}" but the dataset declares id "${result.race.id}"`] };
+      }
       cache.set(id, result);
     }
     return result;
@@ -109,4 +110,4 @@ export function createLocalRepository(payloads: Record<string, unknown> = LOCAL_
 /** The repository the app uses. Swap the implementation here for a remote source. */
 export const raceRepository: RaceRepository = createLocalRepository();
 
-export const LOCAL_RACE_IDS = Object.keys(LOCAL_RACES);
+export const LOCAL_RACE_IDS: readonly string[] = REGISTERED_RACE_IDS;

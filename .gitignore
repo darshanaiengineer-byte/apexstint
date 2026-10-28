@@ -42,6 +42,7 @@ next-env.d.ts
 
 # local tooling
 .playwright-mcp/
+/AGENTS.md
 
 # Playwright
 /test-results/

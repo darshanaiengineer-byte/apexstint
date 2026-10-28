@@ -32,7 +32,9 @@ npm run dev          # http://localhost:3000
 | `npm run typecheck` | Generates route types (`next typegen`) and runs `tsc --noEmit` |
 | `npm run lint` | ESLint (Next.js core-web-vitals + TypeScript rules) |
 | `npm run data:validate` | Schema-validates every bundled race and prints coverage plus cross-source warnings |
-| `npm run data:fetch` | Rebuilds `data/` from the source APIs (network required) |
+| `npm run data:fetch` | Rebuilds `data/races/` from the source APIs (network required); then run `registry:generate` |
+| `npm run registry:generate` | Regenerates the race registry and `data/index.json` from `data/races/*.json` (see [Adding a race](#adding-a-race)) |
+| `npm run registry:check` | Fails if the generated registry is stale (also enforced by `npm test`) |
 | `npm run check` | data:validate → typecheck → lint → test |
 | `npm run test:e2e` | Playwright browser tests against the production build (run `npm run build` first) |
 | `npm run test:e2e:build` | Build, then run the browser tests |
@@ -42,7 +44,7 @@ npm run dev          # http://localhost:3000
 
 **Unit tests** (Vitest, `src/**/*.test.ts`): the model, comparison, data derivations, dataset validation, URL state, formatting, the simulation input contract (cases generated from `LIMITS`, including share-link/simulator agreement) and experiment provenance (golden reference experiment, dataset hashes). Run `npm test`.
 
-**End-to-end browser tests** (Playwright, `e2e/*.spec.ts`): 30 tests in headless Chromium against `next start`, the production server.
+**End-to-end browser tests** (Playwright, `e2e/*.spec.ts`): 44 tests in headless Chromium against `next start`, the production server.
 
 ```bash
 npx playwright install chromium   # once per machine (CI also needs --with-deps for system libraries)
@@ -64,6 +66,7 @@ What they cover:
 - Stint-timeline hover, plus lap-chart and gap-chart hover tooltips.
 - 404 handling, long-stop vs red-flag labelling, and the theme toggle.
 - Experiment provenance: a stable experiment id that changes with inputs and survives a share-link round-trip; stale-dataset links warned; links for another race rejected.
+- Content-Security-Policy (`e2e/csp.spec.ts`): every route (and the 404 page) loads and hydrates under the enforced policy with zero CSP violations, console errors or page errors; every script carries the response's nonce; nonces differ per response; a client-supplied `x-nonce` is ignored (including on prefetch-flagged requests); every HTML response, including look-alikes of excluded asset paths, carries the policy; navigation, lab editing, charts and share links work under the policy.
 
 `@playwright/test` is pinned to 1.63.0 so the browser revision is reproducible.
 
@@ -77,21 +80,30 @@ The app is a standard Next.js App Router project with no backend, database or en
 
 - **Vercel**: import the repository and accept the defaults (framework: Next.js, build: `npm run build`).
 - **Any Node host**: `npm ci && npm run build && npm run start` (respects `PORT`).
-- **Containers**: run the same three commands in a `node:22-alpine` (or `node:24-alpine`) image; Node 20 is not supported and expose the port.
+- **Containers**: run the same three commands in a `node:22-alpine` (or `node:24-alpine`) image and expose the port. Node 20 is not supported.
 
-Overview pages are statically pre-rendered. The strategy lab renders on demand because it reads `?cfg=`. The race JSON is bundled at build time, so there are no runtime file reads.
+Every page is rendered per request: the nonce-based Content-Security-Policy (set by `src/proxy.ts`) cannot be embedded in static HTML. Deploy to a Node server (`next start`, Vercel, a container), not a static host; responses are `Cache-Control: private, no-store`, so put no shared cache in front of HTML. The race JSON is bundled at build time, so there are no runtime file reads. See [ADR-007](docs/architecture/architecture-decisions.md) for the measured performance cost.
+
+### Adding a race
+
+1. Add the race to `RACES` in `scripts/fetch-data.mjs` and run `npm run data:fetch` (or add a schema-valid `data/races/<id>.json` whose `id` equals the file name).
+2. Run `npm run registry:generate`. It validates every dataset and regenerates `src/lib/data/race-registry.generated.ts` and `data/index.json`; a malformed file, schema failure or id/filename mismatch stops it with a message naming the file.
+3. Run `npm run check`. No application code changes are needed.
 
 ## Architecture
 
 ```
 data/                      Bundled dataset (CC BY-NC-SA 4.0, see data/LICENSE.md)
-  index.json, races/*.json
+  races/*.json             One file per race; the single source of truth for which races exist
+  index.json               Generated summary (id, season, round, name)
 scripts/
-  fetch-data.mjs           Builds data/ from Jolpica-F1 + OpenF1; never synthesises values
+  fetch-data.mjs           Builds data/races/ from Jolpica-F1 + OpenF1; never synthesises values
+  generate-race-registry.ts Validates data/races/ and generates the registry + index.json
   validate-data.ts         Schema + consistency check (CI-friendly exit code)
 src/lib/data/              DATA LAYER
   schema.ts                Zod schema, types, cross-source consistency checks
-  repository.ts            RaceRepository interface + local JSON implementation
+  race-registry.generated.ts  Generated static imports of every race file (do not edit)
+  repository.ts            RaceRepository interface + local implementation (rejects key/id mismatches)
   derive.ts                Pure views: lap classification, timelines, coverage, medians
 src/lib/sim/               SIMULATION (pure, deterministic, no React)
   contract.ts              Single source of truth for every numeric input limit
@@ -101,6 +113,9 @@ src/lib/sim/               SIMULATION (pure, deterministic, no React)
   recorded.ts              Recorded data → simulator starting points
 src/lib/canonical.ts       Canonical JSON + FNV-1a-64 (identities)
 src/lib/share/url-state.ts Validated base64url encoding of lab state (with optional provenance)
+src/lib/security/csp.ts    Content-Security-Policy builder (per-request nonce)
+src/proxy.ts               Next.js proxy: generates the nonce and sets the CSP header per request
+src/lib/zod-setup.ts       Runs zod without eval (required by the CSP)
 src/components/            UI (shadcn/ui primitives, Recharts charts)
 src/app/                   Routes
 e2e/                       Playwright browser tests (production build)
@@ -157,7 +172,12 @@ Data honesty rules enforced in code:
 
 **Published.** Public repository: https://github.com/darshanaiengineer-byte/apexstint (initial commit `7619761`, 2026-10-09).
 
-**Engineering-foundation update (2026-10-27, local, not yet committed or run in CI).**
+**Milestone 2 — race registry and Content-Security-Policy (2026-10-27, local, not yet committed or run in CI).**
+- Race availability is generated from `data/races/*.json` (validated, deterministic); the repository refuses to serve a dataset under a key that differs from its declared id. Data files and dataset hashes are unchanged.
+- An enforced, nonce-based CSP: no `'unsafe-inline'` or `'unsafe-eval'` for scripts in production; the one exception is `style-src-attr 'unsafe-inline'`. Every page is now rendered per request, which measurably costs throughput (ADR-007).
+- `npm run check` passes with 310 unit tests; `npm run build` passes; `npm run test:e2e` passes 44/44 browser tests. The 2026-10-28 review found and fixed two CSP bypasses in the proxy matcher (prefetch-flagged requests, and unanchored asset exclusions that let look-alike paths serve the HTML 404 page without a policy) and measured a static-preserving hybrid alternative (ADR-007).
+
+**Milestone 1 — engineering foundation (commit `b5dd51b`; GitHub Actions run 40545116827 passed).**
 - Security: `next` 16.4.0 → 16.4.3 (two critical remote-code-execution advisories and one high-severity denial-of-service advisory) and `zod` → 4.6.7 (one high). `/_next/image` was reachable by default; the app does not use `use cache` or Server Actions; whether the 16.4.0 deployment was exploitable was not verified. See ADR-005. Before the upgrade `next build` failed with `SecurityFatalError`; after it, `npm audit` reports 0 vulnerabilities.
 - `npm run check` passes with 283 unit tests; `npm run build` passes; `npm run test:e2e` passes 30/30 browser tests in three consecutive runs.
 - New: fail-closed simulation contract, reproducible experiment ids with dataset/model versions, benchmark harness, CI audit gate and Dependabot. See the [roadmap](docs/architecture/implementation-roadmap.md).
@@ -194,7 +214,7 @@ Data honesty rules enforced in code:
 **External credentials.** None. `npm run data:fetch` calls public, keyless APIs.
 
 **Not yet production-ready.**
-- No Content-Security-Policy (needs nonce wiring for Next.js and next-themes inline scripts).
+- The CSP allows inline style *attributes* (`style-src-attr 'unsafe-inline'`), and pages render per request (lower throughput than static pages; see ADR-007). It has only been verified on a local production server, not behind a real host or CDN.
 - Browser tests cover Chromium only. Firefox and WebKit, real mobile devices, and visual regression are not tested.
 - Clipboard is tested with permissions granted in Chromium. Behaviour under other browsers' permission prompts isn't verified; the manual-copy fallback is tested.
 - No error monitoring or analytics.

@@ -215,10 +215,12 @@ async function buildRace({ season, round, openf1Circuit, slug, notes }) {
 
 async function main() {
   await mkdir(OUT_DIR, { recursive: true });
-  const index = [];
-  for (const r of RACES) index.push(await buildRace(r));
-  await writeFile(path.join(OUT_DIR, "..", "index.json"), JSON.stringify(index, null, 2) + "\n");
-  console.log(`\n✔ wrote ${index.length} races to ${OUT_DIR}`);
+  const written = [];
+  for (const r of RACES) written.push(await buildRace(r));
+  // data/index.json and the app's race registry are generated from data/races/*.json by
+  // scripts/generate-race-registry.ts (the single writer), so they cannot drift.
+  console.log(`\n✔ wrote ${written.length} races to ${OUT_DIR}`);
+  console.log("  Next: run `npm run registry:generate`, then `npm run data:validate`.");
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {

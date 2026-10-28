@@ -12,8 +12,8 @@ Prioritised by value, risk and dependency. Each milestone is a vertical slice th
 | 1.4 | Experiment provenance (dataset/model version, experiment id, stale-link detection) | Done | Golden experiment, Python-verified dataset hashes, 4 browser tests (ADR-003) |
 | 1.5 | CI: dependency audit gate + Dependabot | Done locally | Audit step fails on old lockfile; **not yet run on GitHub** |
 | 1.6 | Architecture, ADR and threat-model docs | Done | `docs/` |
-| 1.7 | Race registry generated from `data/index.json` (no code edit to add a race) | Next | Contract test: every `data/races/*.json` is registered and valid |
-| 1.8 | Content-Security-Policy with nonces (Next.js + next-themes inline scripts) | Next | Browser tests pass with CSP enforced; no inline-script violations |
+| 1.7 | Race registry generated from `data/races/*.json` (no code edit to add a race) | Done (Milestone 2, local) | 15 registry tests; staleness test; identity check (ADR-006) |
+| 1.8 | Content-Security-Policy with nonces (Next.js + next-themes inline scripts) | Done (Milestone 2, local) | 14 browser tests with zero violations (incl. regression tests for two matcher bypasses); 12 policy unit tests; measured cost (ADR-007) |
 
 ## Milestone 2 — Simulation engine (builds on the existing model)
 
@@ -42,7 +42,7 @@ Typed experiment-spec tools over the existing `runExperiment`; the model's narra
 5. **Data & replay:** provenance per field, data-quality report page, race-event timeline; adapters remain replaceable; synthetic datasets for benchmarks (licensing).
 6. **Agent benchmark:** reproducible bug-injection tasks built from this codebase (e.g. the real stop-lap clamping bug and the long-stop misclassification, both already covered by regression tests), with reference fixes and tests that reject superficial fixes.
 7. **Native interop:** only after Milestone 3 benchmarks show a bottleneck; golden experiments become cross-language test vectors.
-8. **Production engineering:** CSP, structured logs, health checks, visual regression, Firefox/WebKit e2e — added when there is a deployment to operate.
+8. **Production engineering:** structured logs, health checks, visual regression, Firefox/WebKit e2e — added when there is a deployment to operate.
 
 ## Decisions needed from you
 

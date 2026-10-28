@@ -4,10 +4,10 @@ _Last verified against the code: 2026-10-27. "Confirmed" statements were checked
 
 ## What ApexStint is today (confirmed)
 
-A single **Next.js 16 App Router** application (TypeScript, React 19, Tailwind 4, shadcn-style primitives, Recharts). There is no separate backend, database, queue or native code. All race data is bundled at build time; all simulation runs in the browser.
+A single **Next.js 16 App Router** application (TypeScript, React 19, Tailwind 4, shadcn-style primitives, Recharts). There is no separate backend, database, queue or native code. All race data is bundled at build time; all simulation runs in the browser. Every page is rendered per request so that it can carry a per-request CSP nonce (`src/proxy.ts`, ADR-007).
 
 ```
-data/races/*.json ──(build-time import)──▶ src/lib/data/repository.ts ──▶ server components (src/app/**)
+data/races/*.json ──(scripts/generate-race-registry.ts)──▶ race-registry.generated.ts ──(static imports)──▶ repository.ts ──▶ server components
   Jolpica-F1 + OpenF1     zod schema (schema.ts)        RaceLoadResult {race, datasetVersion}     │ props (pre-shaped, serialisable)
   (scripts/fetch-data)    pure views (derive.ts)                                                   ▼
                                                                                     client components (src/components/**)
@@ -20,7 +20,9 @@ data/races/*.json ──(build-time import)──▶ src/lib/data/repository.ts 
 | --- | --- | --- | --- |
 | Data acquisition | `scripts/fetch-data.mjs` | Builds `data/` from two open APIs; never synthesises values | Manually, network |
 | Data validation | `src/lib/data/schema.ts`, `scripts/validate-data.ts` | zod schema + referential and cross-source consistency checks | Load time, CI |
-| Data access | `src/lib/data/repository.ts` | `RaceRepository` interface; local JSON implementation; content-hash `datasetVersion` | Server only (`node:crypto`) |
+| Race registry | `scripts/generate-race-registry.ts` → `src/lib/data/race-registry.generated.ts`, `data/index.json` | Validates every race file and generates the list of races (ADR-006) | Build/dev time; staleness enforced by tests |
+| Data access | `src/lib/data/repository.ts` | `RaceRepository` interface; local implementation over the generated registry; rejects key/`id` mismatches; content-hash `datasetVersion` | Server only (`node:crypto`) |
+| Security headers & CSP | `src/proxy.ts`, `src/lib/security/csp.ts`, `next.config.ts` | Per-request nonce CSP; static security headers | Every document request |
 | Derivations | `src/lib/data/derive.ts` | Clean-lap classification, timelines, coverage, medians (pure, read-only) | Server |
 | Simulation contract | `src/lib/sim/contract.ts` | Single source of truth for every numeric input limit | Shared |
 | Simulation model | `src/lib/sim/model.ts` | Deterministic additive lap-time model; validates all inputs, fails closed | Browser, tests, bench |
@@ -54,7 +56,7 @@ Model formula and its omissions: see `/methodology` in the app and `src/lib/sim/
 
 ## Verification (confirmed, 2026-10-27, local)
 
-`npm run check` (data validation, typecheck, lint, 283 unit tests), `npm run build`, `npm run test:e2e` (30 browser tests, three consecutive passing runs), `npm audit` (0 vulnerabilities after the security upgrade). CI on GitHub last ran for commit `54e9f77`; the changes described here have **not** yet run in CI.
+`npm run check` (data validation, typecheck, lint, 310 unit tests), `npm run build`, `npm run test:e2e` (44 browser tests, including 14 CSP tests), `npm audit` (0 vulnerabilities after the security upgrade). GitHub Actions run 40545116827 passed for Milestone 1 (`b5dd51b`); the Milestone 2 changes (registry, CSP) have **not** yet run in CI.
 
 ## Performance (confirmed by `npm run bench:sim`)
 
@@ -63,6 +65,7 @@ Single simulation ≈ 2.5–4 µs; a lab edit (3 strategies + comparison) ≈ 14
 ## Known limitations (confirmed)
 
 - No uncertainty: no Safety Car/VSC, traffic, weather or fuel model; tyre parameters are illustrative, not calibrated.
-- Three bundled races; adding one requires editing `repository.ts`.
-- No Content-Security-Policy, rate limiting, error monitoring or structured logging (no server-side compute exists that needs rate limiting).
+- Three bundled races; adding one needs a data file and `npm run registry:generate`, no code change.
+- CSP allows inline style attributes (`style-src-attr 'unsafe-inline'`); every page renders per request (measured cost in ADR-007).
+- No rate limiting, error monitoring or structured logging.
 - Data is CC BY-NC-SA 4.0 and **not cleared for commercial use** (`data/LICENSE.md`); no code licence is chosen.

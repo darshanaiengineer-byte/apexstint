@@ -97,7 +97,8 @@ describe("repository error handling", () => {
 
   it("reports schema issues for invalid payloads and hides them from listings", async () => {
     const broken = { ...makeRace(), id: "broken", scheduledLaps: 2 };
-    const repo = createLocalRepository({ good: makeRace(), broken });
+    // Registered under its own declared id (the repository rejects key/id mismatches).
+    const repo = createLocalRepository({ "test-race": makeRace(), broken });
     const res = await repo.getRace("broken");
     expect(res.ok).toBe(false);
     if (!res.ok && res.reason === "invalid") expect(res.issues.some((i) => i.includes("exceeds scheduledLaps"))).toBe(true);

@@ -1,3 +1,4 @@
+import "@/lib/zod-setup";
 import { z } from "zod";
 import { COMPOUNDS, type Compound } from "@/lib/data/schema";
 import { type Assumptions, type Strategy } from "@/lib/sim/model";

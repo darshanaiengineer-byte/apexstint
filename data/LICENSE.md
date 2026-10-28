@@ -19,7 +19,7 @@ Licence text: https://creativecommons.org/licenses/by-nc-sa/4.0/
 | `data/races/*.json`: `drivers`, `results`, `laps`, `pitStops`, `raceName`, `date`, `circuit`, `scheduledLaps` (derived from results) | Jolpica-F1 data | CC BY-NC-SA 4.0 (Jolpica) |
 | `data/races/*.json`: `stints` | OpenF1 data | CC BY-NC-SA 4.0 (OpenF1), subject to OpenF1's disclaimer about underlying F1 data |
 | `data/races/*.json`: `missingFields`, `notes`, `sources`, `id`, `kind`, `schemaVersion` | Written by ApexStint (e.g. the Japan red-flag note) | Inside the adapted dataset, so distributed under CC BY-NC-SA 4.0 (ShareAlike) |
-| `data/index.json` | Race ids and names (from Jolpica) | CC BY-NC-SA 4.0 |
+| `data/index.json` | Race ids and names (from Jolpica), generated from `data/races/*.json` by `scripts/generate-race-registry.ts` | CC BY-NC-SA 4.0 |
 | Values derived at runtime and shown in the app (medians, timelines, classifications) | Adaptations of the above | Same NC/SA conditions when displayed or redistributed |
 | Test files quoting dataset values (`src/lib/data/dataset.test.ts`, `e2e/*.spec.ts`) | Small factual excerpts (e.g. a pit time, stint lengths) | Derived from the covered data; treat as covered |
 

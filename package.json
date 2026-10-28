@@ -15,7 +15,9 @@
     "check": "npm run data:validate && npm run typecheck && npm run lint && npm test",
     "test:e2e": "playwright test",
     "test:e2e:build": "npm run build && playwright test",
-    "bench:sim": "tsx benchmarks/sim-bench.ts"
+    "bench:sim": "tsx benchmarks/sim-bench.ts",
+    "registry:generate": "tsx scripts/generate-race-registry.ts",
+    "registry:check": "tsx scripts/generate-race-registry.ts --check"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",

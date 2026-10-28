@@ -5,9 +5,10 @@ import { Moon, Sun } from "lucide-react";
 import { useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
+/** `nonce` lets next-themes' inline anti-flash script run under the Content-Security-Policy. */
+export function ThemeProvider({ children, nonce }: { children: React.ReactNode; nonce?: string }) {
   return (
-    <NextThemesProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange>
+    <NextThemesProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange nonce={nonce}>
       {children}
     </NextThemesProvider>
   );
